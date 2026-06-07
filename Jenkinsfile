@@ -181,6 +181,12 @@ pipeline {
                 kubectl get pods -l app=web-app -o wide
                 echo "\\nPod events:"
                 kubectl describe pods -l app=web-app
+                echo "\\nPod logs from latest pod:"
+                LATEST_POD=\$(kubectl get pods -l app=web-app -o name | tail -1)
+                if [ ! -z "\$LATEST_POD" ]; then
+                  echo "Logs from \$LATEST_POD:"
+                  kubectl logs \$LATEST_POD --tail=50 || true
+                fi
                 exit 1
               }
             """
