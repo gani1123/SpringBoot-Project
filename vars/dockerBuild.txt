@@ -1,0 +1,5 @@
+Build a Docker image from the repository root and tag it for ECR.
+
+Usage in a Jenkinsfile with shared library:
+
+    dockerBuild(imageTag, latestTag)

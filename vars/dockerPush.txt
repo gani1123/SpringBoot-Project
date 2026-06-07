@@ -1,0 +1,5 @@
+Push the built Docker image to ECR and also push the latest tag.
+
+Usage in a Jenkinsfile with shared library:
+
+    dockerPush(imageTag, latestTag, awsRegion)

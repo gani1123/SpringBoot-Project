@@ -1,0 +1,6 @@
+Checkout the Jenkins SCM repository.
+
+This file is automatically recognized by Jenkins shared libraries when placed under `vars/`.
+Usage in a Jenkinsfile:
+
+    gitCheckout()

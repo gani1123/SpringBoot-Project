@@ -1,0 +1,5 @@
+Build the Maven WAR artifact from the `SpringBootJspApp` module.
+
+Usage in a Jenkinsfile with shared library:
+
+    mavenBuild()
