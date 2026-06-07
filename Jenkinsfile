@@ -5,6 +5,7 @@ pipeline {
     string(name: 'DOCKER_REPOSITORY', defaultValue: 'myapp', description: 'ECR repository and Docker image name')
     string(name: 'EKS_CLUSTER_NAME', defaultValue: 'dev-eks', description: 'EKS cluster name')
     string(name: 'DEPLOYMENT_MANIFEST', defaultValue: 'Deployment.yaml', description: 'Kubernetes deployment manifest file')
+    string(name: 'AWS_CREDENTIALS_ID', defaultValue: 'aws-credentials', description: 'Jenkins credential ID for AWS access keys')
   }
 
   agent any
@@ -15,6 +16,7 @@ pipeline {
     DOCKER_REPOSITORY = "${params.DOCKER_REPOSITORY}"
     EKS_CLUSTER_NAME = "${params.EKS_CLUSTER_NAME}"
     DEPLOYMENT_MANIFEST = "${params.DEPLOYMENT_MANIFEST}"
+    AWS_CREDENTIALS_ID = "${params.AWS_CREDENTIALS_ID}"
   }
 
   stages {
@@ -75,6 +77,29 @@ pipeline {
       }
     }
 
+    stage('Validate AWS Deployment Settings') {
+      when {
+        expression { return env.AWS_ACCOUNT_ID?.trim() }
+      }
+      steps {
+        script {
+          def credentialsId = env.AWS_CREDENTIALS_ID?.trim()
+          def accountId = env.AWS_ACCOUNT_ID?.trim()
+          def clusterName = env.EKS_CLUSTER_NAME?.trim()
+          if (!accountId) {
+            error('AWS_ACCOUNT_ID is required for ECR/EKS deployment')
+          }
+          if (!credentialsId) {
+            error('AWS_CREDENTIALS_ID is required for ECR/EKS deployment')
+          }
+          if (!clusterName) {
+            error('EKS_CLUSTER_NAME is required for EKS deployment')
+          }
+          echo "AWS deployment settings validated: accountId=${accountId}, region=${env.AWS_REGION}, cluster=${clusterName}, credentialsId=${credentialsId}"
+        }
+      }
+    }
+
     stage('Trivy Image Scan') {
       steps {
         script {
@@ -92,7 +117,7 @@ pipeline {
         expression { return env.AWS_ACCOUNT_ID?.trim() }
       }
       steps {
-        withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials']]) {
+        withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: env.AWS_CREDENTIALS_ID]]) {
           script {
             def imageTag = env.IMAGE_TAG ?: error('IMAGE_TAG must be set for ECR push')
             def latestTag = env.LATEST_TAG ?: error('LATEST_TAG must be set for ECR push')
