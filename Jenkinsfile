@@ -174,7 +174,15 @@ pipeline {
             sh """
               aws eks update-kubeconfig --region ${AWS_REGION} --name ${EKS_CLUSTER_NAME}
               kubectl apply -f Deployment.yaml.rendered
-              kubectl rollout status deployment/web-app --timeout=300s
+              
+              echo "Waiting for deployment rollout..."
+              kubectl rollout status deployment/web-app --timeout=600s || {
+                echo "Rollout timeout or error. Checking pod status..."
+                kubectl get pods -l app=web-app -o wide
+                echo "\\nPod events:"
+                kubectl describe pods -l app=web-app
+                exit 1
+              }
             """
           }
         }
