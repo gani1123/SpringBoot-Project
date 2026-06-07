@@ -44,8 +44,9 @@ pipeline {
     stage('Docker Build') {
       steps {
         script {
-          def imageTag = "${env.AWS_ACCOUNT_ID}.dkr.ecr.${env.AWS_REGION}.amazonaws.com/${env.DOCKER_REPOSITORY}:${env.BUILD_NUMBER ?: 'latest'}"
-          def latestTag = "${env.AWS_ACCOUNT_ID}.dkr.ecr.${env.AWS_REGION}.amazonaws.com/${env.DOCKER_REPOSITORY}:latest"
+          def accountId = env.AWS_ACCOUNT_ID ?: error('AWS_ACCOUNT_ID is required for Docker/ECR image tagging')
+          def imageTag = "${accountId}.dkr.ecr.${env.AWS_REGION}.amazonaws.com/${env.DOCKER_REPOSITORY}:${env.BUILD_NUMBER ?: 'latest'}"
+          def latestTag = "${accountId}.dkr.ecr.${env.AWS_REGION}.amazonaws.com/${env.DOCKER_REPOSITORY}:latest"
           def dockerBuild = load 'vars/dockerBuild.groovy'
           dockerBuild.call(imageTag, latestTag)
         }
@@ -55,7 +56,8 @@ pipeline {
     stage('Trivy Image Scan') {
       steps {
         script {
-          def imageTag = "${env.AWS_ACCOUNT_ID}.dkr.ecr.${env.AWS_REGION}.amazonaws.com/${env.DOCKER_REPOSITORY}:${env.BUILD_NUMBER ?: 'latest'}"
+          def accountId = env.AWS_ACCOUNT_ID ?: error('AWS_ACCOUNT_ID is required for Docker/ECR image tagging')
+          def imageTag = "${accountId}.dkr.ecr.${env.AWS_REGION}.amazonaws.com/${env.DOCKER_REPOSITORY}:${env.BUILD_NUMBER ?: 'latest'}"
           sh """
             echo 'Running Trivy Image Scan...'
             export TMPDIR=/opt/trivy-temp
@@ -69,8 +71,9 @@ pipeline {
       steps {
         withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials']]) {
           script {
-            def imageTag = "${env.AWS_ACCOUNT_ID}.dkr.ecr.${env.AWS_REGION}.amazonaws.com/${env.DOCKER_REPOSITORY}:${env.BUILD_NUMBER ?: 'latest'}"
-            def latestTag = "${env.AWS_ACCOUNT_ID}.dkr.ecr.${env.AWS_REGION}.amazonaws.com/${env.DOCKER_REPOSITORY}:latest"
+            def accountId = env.AWS_ACCOUNT_ID ?: error('AWS_ACCOUNT_ID is required for Docker/ECR image tagging')
+            def imageTag = "${accountId}.dkr.ecr.${env.AWS_REGION}.amazonaws.com/${env.DOCKER_REPOSITORY}:${env.BUILD_NUMBER ?: 'latest'}"
+            def latestTag = "${accountId}.dkr.ecr.${env.AWS_REGION}.amazonaws.com/${env.DOCKER_REPOSITORY}:latest"
             def dockerPush = load 'vars/dockerPush.groovy'
             dockerPush.call(imageTag, latestTag, env.AWS_REGION)
           }
@@ -81,7 +84,8 @@ pipeline {
     stage('Update Manifest') {
       steps {
         script {
-          def imageTag = "${env.AWS_ACCOUNT_ID}.dkr.ecr.${env.AWS_REGION}.amazonaws.com/${env.DOCKER_REPOSITORY}:${env.BUILD_NUMBER ?: 'latest'}"
+          def accountId = env.AWS_ACCOUNT_ID ?: error('AWS_ACCOUNT_ID is required for Docker/ECR image tagging')
+          def imageTag = "${accountId}.dkr.ecr.${env.AWS_REGION}.amazonaws.com/${env.DOCKER_REPOSITORY}:${env.BUILD_NUMBER ?: 'latest'}"
           sh "sed -i 's|IMAGE_PLACEHOLDER|${imageTag}|g' ${env.DEPLOYMENT_MANIFEST}"
         }
       }
