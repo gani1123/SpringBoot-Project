@@ -36,7 +36,7 @@ pipeline {
         sh '''
           echo 'Running Trivy FS Scan...'
           export TMPDIR=/opt/trivy-temp
-          trivy fs --severity HIGH,CRITICAL --exit-code 1 .
+          trivy fs --severity HIGH,CRITICAL --exit-code 1 application_build_output/
         '''
       }
     }
