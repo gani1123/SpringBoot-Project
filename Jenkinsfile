@@ -1,22 +1,13 @@
 pipeline {
-  parameters {
-    string(name: 'AWS_ACCOUNT_ID', defaultValue: '', description: 'AWS account ID for ECR image tagging and ECR/EKS deployment')
-    string(name: 'AWS_REGION', defaultValue: 'us-east-1', description: 'AWS region for ECR and EKS')
-    string(name: 'DOCKER_REPOSITORY', defaultValue: 'myapp', description: 'ECR repository and Docker image name')
-    string(name: 'EKS_CLUSTER_NAME', defaultValue: 'dev-eks', description: 'EKS cluster name')
-    string(name: 'DEPLOYMENT_MANIFEST', defaultValue: 'Deployment.yaml', description: 'Kubernetes deployment manifest file')
-    string(name: 'AWS_CREDENTIALS_ID', defaultValue: 'aws-credentials', description: 'Jenkins credential ID for AWS access keys')
-  }
-
   agent any
 
   environment {
-    AWS_ACCOUNT_ID = "${params.AWS_ACCOUNT_ID}"
-    AWS_REGION = "${params.AWS_REGION}"
-    DOCKER_REPOSITORY = "${params.DOCKER_REPOSITORY}"
-    EKS_CLUSTER_NAME = "${params.EKS_CLUSTER_NAME}"
-    DEPLOYMENT_MANIFEST = "${params.DEPLOYMENT_MANIFEST}"
-    AWS_CREDENTIALS_ID = "${params.AWS_CREDENTIALS_ID}"
+    AWS_ACCOUNT_ID = '962800862954'
+    AWS_REGION = 'us-east-1'
+    DOCKER_REPOSITORY = 'myapp'
+    EKS_CLUSTER_NAME = 'dev-eks'
+    DEPLOYMENT_MANIFEST = 'Deployment.yaml'
+    AWS_CREDENTIALS_ID = 'AWS-cred'
   }
 
   stages {
@@ -30,6 +21,26 @@ pipeline {
             echo "Checkout helper unavailable, falling back to checkout scm: ${err}"
             checkout scm
           }
+        }
+      }
+    }
+
+    stage('Validate AWS Credentials') {
+      when {
+        expression { return env.AWS_ACCOUNT_ID?.trim() }
+      }
+      steps {
+        withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: env.AWS_CREDENTIALS_ID]]) {
+          sh '''
+            echo "Checking AWS identity..."
+            aws sts get-caller-identity
+
+            echo "Checking ECR access..."
+            aws ecr describe-repositories --region ${AWS_REGION} || true
+
+            echo "Checking EKS access..."
+            aws eks describe-cluster --name ${EKS_CLUSTER_NAME} --region ${AWS_REGION} || true
+          '''
         }
       }
     }
@@ -57,13 +68,15 @@ pipeline {
       steps {
         script {
           def accountId = env.AWS_ACCOUNT_ID?.trim()
+          def awsRegion = env.AWS_REGION?.trim() ?: 'us-east-1'
+          def dockerRepo = env.DOCKER_REPOSITORY?.trim() ?: 'myapp'
           def buildSuffix = env.BUILD_NUMBER ?: 'local'
-          def imageTag = "${env.DOCKER_REPOSITORY}:${buildSuffix}"
-          def latestTag = "${env.DOCKER_REPOSITORY}:latest"
+          def imageTag = "${dockerRepo}:${buildSuffix}"
+          def latestTag = "${dockerRepo}:latest"
 
           if (accountId) {
-            imageTag = "${accountId}.dkr.ecr.${env.AWS_REGION}.amazonaws.com/${env.DOCKER_REPOSITORY}:${buildSuffix}"
-            latestTag = "${accountId}.dkr.ecr.${env.AWS_REGION}.amazonaws.com/${env.DOCKER_REPOSITORY}:latest"
+            imageTag = "${accountId}.dkr.ecr.${awsRegion}.amazonaws.com/${dockerRepo}:${buildSuffix}"
+            latestTag = "${accountId}.dkr.ecr.${awsRegion}.amazonaws.com/${dockerRepo}:latest"
             echo "Building ECR image ${imageTag}"
           } else {
             echo "AWS_ACCOUNT_ID not configured. Building local image ${imageTag} and skipping ECR/deploy stages."
@@ -73,6 +86,9 @@ pipeline {
           dockerBuild.call(imageTag, latestTag)
           env.IMAGE_TAG = imageTag
           env.LATEST_TAG = latestTag
+          env.AWS_REGION = awsRegion
+          env.DOCKER_REPOSITORY = dockerRepo
+          env.EKS_CLUSTER_NAME = env.EKS_CLUSTER_NAME?.trim() ?: 'dev-eks'
         }
       }
     }
@@ -139,7 +155,11 @@ pipeline {
       steps {
         script {
           def imageTag = env.IMAGE_TAG ?: error('IMAGE_TAG must be set for manifest update')
-          sh "sed -i 's|IMAGE_PLACEHOLDER|${imageTag}|g' ${env.DEPLOYMENT_MANIFEST}"
+          def originalManifest = env.DEPLOYMENT_MANIFEST ?: 'Deployment.yaml'
+          def renderedManifest = "${originalManifest}.rendered"
+          sh "cp ${originalManifest} ${renderedManifest}"
+          sh "sed -i 's|IMAGE_PLACEHOLDER|${imageTag}|g' ${renderedManifest}"
+          env.DEPLOYMENT_MANIFEST = renderedManifest
         }
       }
     }
@@ -149,12 +169,14 @@ pipeline {
         expression { return env.AWS_ACCOUNT_ID?.trim() }
       }
       steps {
-        withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials']]) {
-          sh '''
-            aws eks update-kubeconfig --region ${AWS_REGION} --name ${EKS_CLUSTER_NAME}
-            kubectl apply -f ${DEPLOYMENT_MANIFEST}
-            kubectl rollout status deployment/web-app --timeout=300s
-          '''
+        script {
+          withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: env.AWS_CREDENTIALS_ID]]) {
+            sh '''
+              aws eks update-kubeconfig --region ${AWS_REGION} --name ${EKS_CLUSTER_NAME}
+              kubectl apply -f ${DEPLOYMENT_MANIFEST}
+              kubectl rollout status deployment/web-app --timeout=300s
+            '''
+          }
         }
       }
     }
