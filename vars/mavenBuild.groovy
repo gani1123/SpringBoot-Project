@@ -13,7 +13,7 @@ def call() {
       ARTIFACT=target/SpringBootJsp.war.original
     fi
     echo "Using WAR artifact: ${ARTIFACT}"
-    cp "${ARTIFACT}" ${WORKSPACE}/application_build_output/
+    cp "${ARTIFACT}" ${WORKSPACE}/application_build_output/SpringBootJsp.war
   '''
 }
 return this
