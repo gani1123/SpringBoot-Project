@@ -17,6 +17,7 @@ spec:
       containers:
         - name: web-app
           image: IMAGE_PLACEHOLDER
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8080
           readinessProbe:
