@@ -1,10 +1,20 @@
 pipeline {
+  parameters {
+    string(name: 'AWS_ACCOUNT_ID', defaultValue: '', description: 'AWS account ID for ECR image tagging and ECR/EKS deployment')
+    string(name: 'AWS_REGION', defaultValue: 'us-east-1', description: 'AWS region for ECR and EKS')
+    string(name: 'DOCKER_REPOSITORY', defaultValue: 'myapp', description: 'ECR repository and Docker image name')
+    string(name: 'EKS_CLUSTER_NAME', defaultValue: 'dev-eks', description: 'EKS cluster name')
+    string(name: 'DEPLOYMENT_MANIFEST', defaultValue: 'Deployment.yaml', description: 'Kubernetes deployment manifest file')
+  }
+
   agent any
 
   environment {
-    AWS_REGION = 'us-east-1'
-    DOCKER_REPOSITORY = 'myapp'
-    DEPLOYMENT_MANIFEST = 'Deployment.yaml'
+    AWS_ACCOUNT_ID = "${params.AWS_ACCOUNT_ID}"
+    AWS_REGION = "${params.AWS_REGION}"
+    DOCKER_REPOSITORY = "${params.DOCKER_REPOSITORY}"
+    EKS_CLUSTER_NAME = "${params.EKS_CLUSTER_NAME}"
+    DEPLOYMENT_MANIFEST = "${params.DEPLOYMENT_MANIFEST}"
   }
 
   stages {
@@ -84,9 +94,12 @@ pipeline {
       steps {
         withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials']]) {
           script {
-            def accountId = env.AWS_ACCOUNT_ID.trim()
-            def imageTag = "${accountId}.dkr.ecr.${env.AWS_REGION}.amazonaws.com/${env.DOCKER_REPOSITORY}:${env.BUILD_NUMBER ?: 'local'}"
-            def latestTag = "${accountId}.dkr.ecr.${env.AWS_REGION}.amazonaws.com/${env.DOCKER_REPOSITORY}:latest"
+            def imageTag = env.IMAGE_TAG ?: error('IMAGE_TAG must be set for ECR push')
+            def latestTag = env.LATEST_TAG ?: error('LATEST_TAG must be set for ECR push')
+            sh """
+              aws ecr describe-repositories --repository-names ${env.DOCKER_REPOSITORY} --region ${env.AWS_REGION} || \
+                aws ecr create-repository --repository-name ${env.DOCKER_REPOSITORY} --region ${env.AWS_REGION}
+            """
             def dockerPush = load 'vars/dockerPush.groovy'
             dockerPush.call(imageTag, latestTag, env.AWS_REGION)
           }
@@ -100,8 +113,7 @@ pipeline {
       }
       steps {
         script {
-          def accountId = env.AWS_ACCOUNT_ID.trim()
-          def imageTag = "${accountId}.dkr.ecr.${env.AWS_REGION}.amazonaws.com/${env.DOCKER_REPOSITORY}:${env.BUILD_NUMBER ?: 'local'}"
+          def imageTag = env.IMAGE_TAG ?: error('IMAGE_TAG must be set for manifest update')
           sh "sed -i 's|IMAGE_PLACEHOLDER|${imageTag}|g' ${env.DEPLOYMENT_MANIFEST}"
         }
       }
@@ -114,7 +126,7 @@ pipeline {
       steps {
         withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials']]) {
           sh '''
-            aws eks update-kubeconfig --region ${AWS_REGION} --name dev-eks
+            aws eks update-kubeconfig --region ${AWS_REGION} --name ${EKS_CLUSTER_NAME}
             kubectl apply -f ${DEPLOYMENT_MANIFEST}
             kubectl rollout status deployment/web-app --timeout=300s
           '''
