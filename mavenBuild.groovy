@@ -8,7 +8,12 @@ def call() {
       mvn clean package -DskipTests
     fi
     mkdir -p ${WORKSPACE}/application_build_output
-    cp target/SpringBootJsp.war ${WORKSPACE}/application_build_output/
+    ARTIFACT=target/SpringBootJsp.war
+    if [ -f target/SpringBootJsp.war.original ]; then
+      ARTIFACT=target/SpringBootJsp.war.original
+    fi
+    echo "Using WAR artifact: ${ARTIFACT}"
+    cp "${ARTIFACT}" ${WORKSPACE}/application_build_output/
   '''
 }
 return this
