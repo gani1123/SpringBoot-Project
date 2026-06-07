@@ -1,0 +1,13 @@
+/target/
+HELP.md
+bin/
+
+/.metadata
+/SpringBootJspApp/bin/
+/SpringBootJspApp/target
+
+
+### STS/eclipse ###
+.classpath
+.project
+.settings
