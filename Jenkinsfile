@@ -171,10 +171,9 @@ pipeline {
       steps {
         script {
           withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: env.AWS_CREDENTIALS_ID]]) {
-            def manifestFile = env.DEPLOYMENT_MANIFEST ?: 'Deployment.yaml'
             sh """
               aws eks update-kubeconfig --region ${AWS_REGION} --name ${EKS_CLUSTER_NAME}
-              kubectl apply -f ${manifestFile}
+              kubectl apply -f Deployment.yaml.rendered
               kubectl rollout status deployment/web-app --timeout=300s
             """
           }
